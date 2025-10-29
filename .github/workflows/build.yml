@@ -1,0 +1,38 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 node/yarn
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: yarn install --frozen-lockfile
+
+      - name: 生成数据库
+        run: npx drizzle-kit generate
+
+      - name: Expo CLI 安装
+        run: yarn global add expo-cli
+
+      - name: 打包 APK (需替换为你实际配置)
+        run: expo build:android --no-wait --type apk
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: cherry-apk
+          path: dist/*.apk
+          if-no-files-found: ignore

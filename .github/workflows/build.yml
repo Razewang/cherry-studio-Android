@@ -33,9 +33,12 @@ jobs:
       - name: Expo prebuild (Android)
         run: npx expo prebuild -p android
 
-      # 关键：EXPO_TOKEN 一定要设置，否则云端构建会失败
+      # 新增步骤：全局安装 eas-cli
+      - name: Install eas-cli
+        run: npm install -g eas-cli
+
       - name: Build APK with EAS
-        run: npx eas build --platform android --non-interactive
+        run: eas build --platform android --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
@@ -43,4 +46,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: dist/*.apk # 请根据实际产物路径修改
+          path: dist/*.apk # 按实际产物路径设定

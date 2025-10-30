@@ -1,4 +1,4 @@
-name: Android Build & Release
+name: Build Android APK
 
 on:
   push:
@@ -11,47 +11,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 检出源码
+      # 检出项目源码
       - name: Checkout source
         uses: actions/checkout@v3
 
-      # 2. 设置 Node 环境
+      # 设置 Node 环境
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      # 3. Yarn 安装依赖
+      # 安装依赖
       - name: Install dependencies
         run: yarn install
 
-      # 4. drizzle-kit 生成数据库
+      # 生成数据库
       - name: Generate database (drizzle-kit)
         run: npx drizzle-kit generate
 
-      # 5. Expo 预构建
-      - name: Expo prebuild for Android
+      # Expo 预构建
+      - name: Expo prebuild (Android)
         run: npx expo prebuild -p android
 
-      # 6. EAS 构建 APK（推荐）
-      - name: EAS Build APK
+      # EAS 云构建 APK
+      - name: Build APK with EAS
         run: npx eas build --platform android --non-interactive
         env:
-          EAS_PROJECT_ID: ${{ secrets.EAS_PROJECT_ID }}
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # 如果用 expo build:android（不推荐，但如果要用）
-      # - name: Build APK (expo build:android, 可选)
-      #   run: npx expo build:android --no-wait
-
-      # 7. 上传构建产物到 artifact
+      # 上传 APK 到 Actions Artifact
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: dist/*.apk  # EAS 构建后 apk 路径需要根据实际结果调整
-
-# 额外说明：
-# - secrets 中 EAS_PROJECT_ID 和 EXPO_TOKEN 需要在项目/Expo/EAS 后台获取并在仓库设置。
-# - 若用 expo build:android，需要配置好 Expo 账号和 keystore 信息，可以查看 Expo 官方文档。
-# - drizzle-kit 可根据实际情况决定是否启用。
+          path: dist/*.apk # 按实际 APK 产物路径设定

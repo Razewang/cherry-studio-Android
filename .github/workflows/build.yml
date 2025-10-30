@@ -1,109 +1,57 @@
-name: Android Release
+name: Android Build & Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag (e.g. v1.0.0)'
-        required: true
-        default: 'v1.0.0'
   push:
-    tags:
-      - 'v*.*.*'
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build-android:
-    name: Build Android and Create Release
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout code
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      # 1. 检出源码
+      - name: Checkout source
+        uses: actions/checkout@v3
 
-      # Step 2: Setup Node.js (16.9+ for Corepack)
+      # 2. 设置 Node 环境
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: 20.x
+          node-version: '18'
 
-      # Step 3: Enable Corepack for Yarn 4
-      - name: Enable Corepack (for Yarn 4)
-        run: |
-          corepack enable
-          corepack prepare yarn@4.10.3 --activate
-
-      # Step 4: Setup Expo and EAS
-      - name: Setup Expo and EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-          packager: npm
-
-      # Step 5: Install dependencies
+      # 3. Yarn 安装依赖
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn install
 
-      # Step 6: 生成 drizzle-kit 数据库
-      - name: Generate drizzle-kit
+      # 4. drizzle-kit 生成数据库
+      - name: Generate database (drizzle-kit)
         run: npx drizzle-kit generate
 
-      # Step 7: Get version tag
-      - name: Get version tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+      # 5. Expo 预构建
+      - name: Expo prebuild for Android
+        run: npx expo prebuild -p android
 
-      # Step 8: Build Android on EAS (Expo Cloud)
-      - name: Build Android on EAS
-        id: build_android
-        run: |
-          echo "Building Android APK on EAS (version from package.json)..."
-          eas build --platform android --profile production --non-interactive --no-wait --json > android_build.json
-          BUILD_ID=$(cat android_build.json | jq -r '.[0].id')
-          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
-          echo "🤖 Android Build ID: $BUILD_ID"
-          echo "🔗 View Android build: https://expo.dev/accounts/[your-account]/projects/cherry-studio/builds/$BUILD_ID"
+      # 6. EAS 构建 APK（推荐）
+      - name: EAS Build APK
+        run: npx eas build --platform android --non-interactive
+        env:
+          EAS_PROJECT_ID: ${{ secrets.EAS_PROJECT_ID }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # Step 9: Wait for Android build to complete (轮询，直到APK产出)
-      - name: Wait for Android build
-        run: |
-          echo "Waiting for Android build to complete..."
-          BUILD_ID="${{ steps.build_android.outputs.build_id }}"
-          while true; do
-            STATUS=$(eas build:view $BUILD_ID --json | jq -r '.status')
-            STATUS_LOWER=$(echo "$STATUS" | tr '[:upper:]' '[:lower:]')
-            echo "Current status: $STATUS"
-            if [ "$STATUS_LOWER" == "finished" ]; then
-              echo "✅ Build completed successfully!"
-              break
-            elif [ "$STATUS_LOWER" == "errored" ] || [ "$STATUS_LOWER" == "canceled" ]; then
-              echo "❌ Build failed with status: $STATUS"
-              echo "View build details at: https://expo.dev/accounts/[your-account]/projects/cherry-studio/builds/$BUILD_ID"
-              exit 1
-            elif [ -z "$STATUS" ]; then
-              echo "⚠️ Failed to get build status, retrying..."
-              sleep 10
-              continue
-            fi
-            echo "⏳ Build still in progress, waiting 60 seconds..."
-            sleep 60
-          done
+      # 如果用 expo build:android（不推荐，但如果要用）
+      # - name: Build APK (expo build:android, 可选)
+      #   run: npx expo build:android --no-wait
 
-      # Step 10: Download Android APK
-      - name: Download Android APK
-        run: |
-          BUILD_ID="${{ steps.build_android.outputs.build_id }}"
-          ARTIFACT_URL=$(eas build:view $BUILD_ID --json | jq -r '.artifacts.buildUrl')
-          curl -L -o Cherry-Studio-${{ steps.version.outputs.tag }}.apk "$ARTIFACT_URL"
-          ls -lh Cherry-Studio-${{ steps.version.outputs.tag }}.apk
+      # 7. 上传构建产物到 artifact
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-apk
+          path: dist/*.apk  # EAS 构建后 apk 路径需要根据实际结果调整
 
-      # Step 11: Create GitHub Release
-      - name: Create GitHub Release
-        id: create_release
-        uses: softprops/action-gh-release@v1
+# 额外说明：
+# - secrets 中 EAS_PROJECT_ID 和 EXPO_TOKEN 需要在项目/Expo/EAS 后台获取并在仓库设置。
+# - 若用 expo build:android，需要配置好 Expo 账号和 keystore 信息，可以查看 Expo 官方文档。
+# - drizzle-kit 可根据实际情况决定是否启用。

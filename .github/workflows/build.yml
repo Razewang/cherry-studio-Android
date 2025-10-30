@@ -11,44 +11,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 检出源码
       - name: Checkout source
         uses: actions/checkout@v3
 
-      # 安装 Node.js，并激活 Corepack（Node 16.9+ 默认已带，保险起见补全步骤）
       - name: Setup Node.js & Enable Corepack
         uses: actions/setup-node@v3
         with:
           node-version: '18'
       - name: Enable Corepack
         run: corepack enable
-      
-      # 安装正确 yarn 版本（自动适配 package.json，确保 yarn@4.10.3）
-      - name: Install Yarn 4.x using Corepack
+
+      - name: Install Yarn 4.x
         run: corepack prepare yarn@4.10.3 --activate
 
-      # 安装依赖
       - name: Install dependencies
         run: yarn install
 
-      # 生成数据库
       - name: Generate database (drizzle-kit)
         run: npx drizzle-kit generate
 
-      # Expo 预构建
       - name: Expo prebuild (Android)
         run: npx expo prebuild -p android
 
-      # EAS 云端构建 APK （需要 secrets["EXPO_TOKEN"]，Expo 官网获取）
+      # 关键：EXPO_TOKEN 一定要设置，否则云端构建会失败
       - name: Build APK with EAS
         run: npx eas build --platform android --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # 上传 APK 到 Actions Artifact
-      - name: Upload APK with v4 (deprecated v3请不要用)
+      - name: Upload APK with v4
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: dist/*.apk # 按实际产物路径设定（如 EAS产物直接云端下载，可删掉此步或推release）
-
+          path: dist/*.apk # 请根据实际产物路径修改
